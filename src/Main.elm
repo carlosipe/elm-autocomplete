@@ -1,33 +1,47 @@
+port module Main exposing(..)
 import Browser
 import Html exposing (Html, div, text, button, input, h1, pre, ul, li)
 import Html.Attributes exposing (style, placeholder, value, href)
 import Html.Events exposing (onInput, onClick)
 import String exposing(fromInt)
 import Dict
+import Http
+import Json.Decode exposing (Decoder, list, string, decodeString)
+import Json.Encode as E
 
-init: Model
-init =
+port autocompleted : String.String -> Cmd msg
+
+init: () -> (Model, Cmd Msg)
+init _ =
+  (
     { query = ""
     , suggestions = []
+    , error = ""
     }
+    , Cmd.none
+  )
 
 type alias Model =
     { query: String
     , suggestions: List String
+    , error: String
     }
 
 type Msg
     = Change String
     | SetQuery String
+    | DisplaySuggestions (Result Http.Error (List String))
 
     
-suggestions_for query =
-   Dict.fromList [
-        ("a", ["alfabeto", "abadía", "arnau"])
-        , ("al", ["alfabeto", "alfalfa"])
-        ]
-        |> Dict.get(query)
-        |> Maybe.withDefault []
+suggestionsFor query =
+  Http.get
+  { url = "/a.json?search=" ++ query
+  , expect = Http.expectJson DisplaySuggestions suggestionsDecoder
+  }
+
+suggestionsDecoder: Decoder (List String)
+suggestionsDecoder =
+    list string
 
 view: Model -> Html Msg
 view model =
@@ -41,18 +55,24 @@ suggestionsView suggestions =
       ul [] (suggestions
         |> List.map(\s -> li [onClick (SetQuery s)] [text(s)]))
 
-
-update: Msg -> Model -> Model
+update: Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case msg of
         Change str ->
-          { model | query = str, suggestions = suggestions_for(str)}
+          ({ model | query = str }, suggestionsFor str )
         SetQuery str ->
-          { model | query = str, suggestions = [] }
+          ({ model | query = str, suggestions = [] }, autocompleted(str))
+        DisplaySuggestions result ->
+            case result of
+                Ok suggestions ->
+                  ( { model | suggestions = suggestions, error = "" }, Cmd.none )
+                Err error ->
+                  ( { model | error = Debug.toString(error) }, Cmd.none )
 
 main =
-    Browser.sandbox
+    Browser.element
        { init = init
        , view = view
        , update = update
+       , subscriptions = (\_ -> Sub.none)
        }
