@@ -11,12 +11,13 @@ import Json.Encode as E
 
 port autocompleted : String.String -> Cmd msg
 
-init: () -> (Model, Cmd Msg)
-init _ =
+init: String -> (Model, Cmd Msg)
+init suggestionsUrl = 
   (
     { query = ""
     , suggestions = []
     , error = ""
+    , suggestionsUrl = suggestionsUrl
     }
     , Cmd.none
   )
@@ -25,6 +26,7 @@ type alias Model =
     { query: String
     , suggestions: List String
     , error: String
+    , suggestionsUrl : String
     }
 
 type Msg
@@ -32,10 +34,10 @@ type Msg
     | SetQuery String
     | DisplaySuggestions (Result Http.Error (List String))
 
-    
-suggestionsFor query =
+ 
+suggestionsFor suggestionsUrl query =
   Http.get
-  { url = "/a.json?search=" ++ query
+  { url = suggestionsUrl ++ "?search=" ++ query
   , expect = Http.expectJson DisplaySuggestions suggestionsDecoder
   }
 
@@ -59,7 +61,7 @@ update: Msg -> Model -> (Model, Cmd Msg)
 update msg model =
     case msg of
         Change str ->
-          ({ model | query = str }, suggestionsFor str )
+          ({ model | query = str }, suggestionsFor model.suggestionsUrl str )
         SetQuery str ->
           ({ model | query = str, suggestions = [] }, autocompleted(str))
         DisplaySuggestions result ->
